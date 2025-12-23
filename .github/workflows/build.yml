@@ -1,0 +1,45 @@
+name: APK Olustur
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Kodlari Cek
+      uses: actions/checkout@v3
+
+    - name: Python Kurulumu
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Java Kurulumu
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Flutter Kurulumu
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.0'
+
+    - name: Kutuphaneleri Yukle
+      run: |
+        pip install flet
+        pip install -r requirements.txt
+
+    - name: Flet ile APK Derle
+      run: |
+        flet build apk --verbose
+
+    - name: APK'yi Yukle (Artifacts)
+      uses: actions/upload-artifact@v3
+      with:
+        name: mobil-uygulama-apk
+        path: build/app/outputs/flutter-apk/app-release.apk
