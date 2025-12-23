@@ -42,4 +42,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: mobil-uygulama-apk
-        path: build/app/outputs/flutter-apk/app-release.apk
+        path: build/**/*.apk
