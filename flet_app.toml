@@ -1,0 +1,6 @@
+[package]
+product_name = "Mesai Takip" # Telefonun ana ekranında görünecek isim
+bundle_id = "com.mesaitakip.app" # Benzersiz kimlik (isteğe bağlı değiştirebilirsin)
+
+[android]
+icon = "assets/icon.png" # Telefonun ana ekranındaki simge yolu
