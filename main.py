@@ -291,14 +291,43 @@ class MesaiApp:
 
     def save_mesai(self, e):
         if not (self.start_time and self.end_time): return
-        maas, katsayi = float(self.txt_salary.value), float(self.txt_katsayi.value)
-        t1, t2 = datetime.combine(date.today(), self.start_time), datetime.combine(date.today(), self.end_time)
-        if t2 < t1: t2 += timedelta(days=1)
-        dk = int((t2 - t1).total_seconds() / 60); ucret = (maas / 225 / 60) * dk * katsayi
+        
+        # Giriş yapılan değerleri al
+        maas = float(self.txt_salary.value)
+        katsayi = float(self.txt_katsayi.value)
+        
+        # Süre hesaplama (Gece vardiyası geçişi dahil)
+        t1 = datetime.combine(date.today(), self.start_time)
+        t2 = datetime.combine(date.today(), self.end_time)
+        if t2 < t1: 
+            t2 += timedelta(days=1)
+        
+        # Toplam çalışılan dakika
+        dk = int((t2 - t1).total_seconds() / 60)
+        
+        # --- SENİN FORMÜLÜN: Maaş / 30 / 9 / 60 ---
+        # 1. Günlük ücret (Maaş / 30)
+        # 2. Saatlik ücret (Günlük / 9)
+        # 3. Dakikalık ücret (Saatlik / 60)
+        dakika_ucreti = ((maas / 30) / 9) / 60
+        
+        # Toplam ücret = Dakika Ücreti * Toplam Dakika * Katsayı
+        ucret = round(dakika_ucreti * dk * katsayi, 2)
+        
         tarih = self.selected_date.strftime("%Y-%m-%d")
-        if self.editing_id: self.cursor.execute("UPDATE mesailer SET tarih=?, baslangic=?, bitis=?, maas=?, sure_dakika=?, ucret=? WHERE id=?", (tarih, self.start_time.strftime("%H:%M"), self.end_time.strftime("%H:%M"), maas, dk, ucret, self.editing_id)); self.editing_id = None
-        else: self.cursor.execute("INSERT INTO mesailer (tarih, baslangic, bitis, maas, sure_dakika, ucret) VALUES (?,?,?,?,?,?)", (tarih, self.start_time.strftime("%H:%M"), self.end_time.strftime("%H:%M"), maas, dk, ucret))
-        self.conn.commit(); self.nav_bar.selected_index = 1; self.load_tab(1)
+        
+        # Veritabanı işlemleri
+        if self.editing_id: 
+            self.cursor.execute("UPDATE mesailer SET tarih=?, baslangic=?, bitis=?, maas=?, sure_dakika=?, ucret=? WHERE id=?", 
+                                (tarih, self.start_time.strftime("%H:%M"), self.end_time.strftime("%H:%M"), maas, dk, ucret, self.editing_id))
+            self.editing_id = None
+        else: 
+            self.cursor.execute("INSERT INTO mesailer (tarih, baslangic, bitis, maas, sure_dakika, ucret) VALUES (?,?,?,?,?,?)", 
+                                (tarih, self.start_time.strftime("%H:%M"), self.end_time.strftime("%H:%M"), maas, dk, ucret))
+        
+        self.conn.commit()
+        self.nav_bar.selected_index = 1
+        self.load_tab(1)
 
     def show_msg(self, t, c):
         # BURADA DÜZELTME YAPILDI: Snack bar yeni sürüme uyarlandı
