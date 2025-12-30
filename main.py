@@ -334,10 +334,14 @@ class MesaiApp:
         self.page.open(ft.SnackBar(ft.Text(t), bgcolor=c))
         self.page.update()
 
-    def restore_result(self, e: ft.FilePickerResultEvent):
+    def restore_result(self, e):  # Tip belirtmesini (ft.FilePickerResultEvent) kaldırdık
         if e.files:
-            shutil.copy2(e.files[0].path, self.db_path); self.init_db(); self.load_settings()
-            self.update_theme_colors(); self.show_msg("Yedek Yüklendi!", "green"); self.show_settings_view()
+            shutil.copy2(e.files[0].path, self.db_path)
+            self.init_db()
+            self.load_settings()
+            self.update_theme_colors()
+            self.show_msg("Yedek Yüklendi!", "green")
+            self.show_settings_view()
 
     def backup_result(self, e):
         if e.path: shutil.copy2(self.db_path, e.path); self.show_msg("Yedek Alındı", "green")
@@ -367,3 +371,4 @@ class MesaiApp:
 
 def main(page: ft.Page): MesaiApp(page)
 ft.app(target=main)
+
