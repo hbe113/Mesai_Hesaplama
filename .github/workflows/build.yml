@@ -35,7 +35,7 @@ jobs:
 
     - name: Flet ile APK Derle
       run: |
-        flet build apk --verbose
+        flet build apk --project "Mesai Takip" --verbose
 
     - name: APK'yi Yukle (Artifacts v4)
       uses: actions/upload-artifact@v4
