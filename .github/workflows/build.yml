@@ -31,7 +31,6 @@ jobs:
 
     - name: Kutuphaneleri Yukle
       run: |
-        pip install flet
         pip install -r requirements.txt
 
     - name: Flet ile APK Derle
