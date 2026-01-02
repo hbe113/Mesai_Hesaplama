@@ -17,6 +17,8 @@ class DBManager:
         self.cursor.execute("CREATE TABLE IF NOT EXISTS mesailer (id INTEGER PRIMARY KEY, tarih TEXT, baslangic TEXT, bitis TEXT, maas REAL, sure_dakika INTEGER, ucret REAL)")
         self.cursor.execute("CREATE TABLE IF NOT EXISTS finans (id INTEGER PRIMARY KEY, tur TEXT, miktar REAL, tarih TEXT, aciklama TEXT)")
         self.cursor.execute("CREATE TABLE IF NOT EXISTS ayarlar (id INTEGER PRIMARY KEY, varsayilan_maas REAL, mesai_katsayisi REAL, tema_modu TEXT, ana_renk TEXT, vurgu_renk TEXT, aylik_hedef REAL)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_tarih ON mesailer(tarih)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_finans_tarih ON finans(tarih)")
         
         self.cursor.execute("SELECT COUNT(*) FROM ayarlar")
         if self.cursor.fetchone()[0] == 0:

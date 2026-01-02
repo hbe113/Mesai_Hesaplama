@@ -1,9 +1,9 @@
 import flet as ft
 import shutil
 import os
+import threading # Hızlandırma için kritik
 from datetime import datetime, date, timedelta
 
-# Kendi oluşturduğumuz modülleri içeri aktarıyoruz
 from database.db_manager import DBManager
 from utils.helpers import tr_date_format
 from views.add_view import build_add_view
@@ -15,13 +15,16 @@ from views.settings_view import build_settings_view
 class MesaiApp:
     def __init__(self, page: ft.Page):
         self.page = page
-        self.page.title = "Mesai Takip Pro"
+        self.page.title = "Mesai Takip"
         self.page.padding = 0
         self.page.spacing = 0
         
-        # Veritabanı bağlantısı
-        self.db = DBManager()
-        self.load_settings()
+        # --- 1. HIZLANDIRMA: Varsayılan Değerler ---
+        # Veritabanı yüklenene kadar UI'ın çökmemesi için geçici renkler
+        self.v_ana_renk = "#1A237E" 
+        self.v_vurgu_renk = "#00BFA5"
+        self.v_tema = "dark"
+        self.view_cache = {} # Sayfa önbelleği
         
         # Durum Değişkenleri
         self.editing_id = None 
@@ -32,7 +35,15 @@ class MesaiApp:
         self.target_color_input = None
         self.target_color_preview = None
 
-        # Seçiciler ve Diyaloglar
+        # --- 2. Arayüz Bileşenlerini Hazırla (Hızlı) ---
+        self.init_ui_components()
+        
+        # --- 3. Arka Planda Yükleme Başlat ---
+        # Beyaz ekran süresini azaltmak için ağır işleri Thread içine alıyoruz
+        threading.Thread(target=self.initial_boot, daemon=True).start()
+
+    def init_ui_components(self):
+        """Uygulama iskeletini hızlıca oluşturur"""
         self.date_picker = ft.DatePicker(on_change=self.on_date_change)
         self.time_picker_start = ft.TimePicker(on_change=self.on_start_time_change)
         self.time_picker_end = ft.TimePicker(on_change=self.on_end_time_change)
@@ -44,7 +55,6 @@ class MesaiApp:
             self.time_picker_end, self.backup_dialog, self.restore_dialog
         ])
 
-        # Alt Navigasyon Çubuğu
         self.nav_bar = ft.NavigationBar(
             destinations=[
                 ft.NavigationBarDestination(icon=ft.Icons.ADD_CIRCLE_OUTLINE, label="Ekle"),
@@ -54,25 +64,41 @@ class MesaiApp:
             ],
             on_change=self.nav_change,
             selected_index=0,
+            visible=False # Veri gelene kadar gizli kalsın
         )
 
         self.content_area = ft.Column(expand=True, spacing=0)
         
-        # Üst Bar (App Bar)
+        # Yükleme ekranı (Beyaz ekran yerine kullanıcı bunu görür)
+        self.loader = ft.Container(
+            content=ft.ProgressRing(color=self.v_vurgu_renk),
+            alignment=ft.alignment.center,
+            expand=True
+        )
+
         self.app_bar = ft.Container(
             content=ft.Row([
-                ft.Container(width=40),
-                ft.Text("MESAİ TAKİP PRO", size=18, weight="bold", color="white"),
+                ft.Container(width=10), 
+                ft.Text("MESAİ TAKİP", size=18, weight="bold", color="white"),
                 ft.IconButton(ft.Icons.SETTINGS, icon_color="white", on_click=self.toggle_settings),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            bgcolor=self.v_ana_renk, padding=10,
+            bgcolor=self.v_ana_renk,
+            padding=ft.padding.only(top=35, bottom=5, left=10, right=10),
         )
 
         self.page.add(self.app_bar, self.content_area, self.nav_bar)
-        
-        # Başlangıç Senkronizasyonu ve İlk Sayfa
+        self.content_area.controls.append(self.loader)
+        self.page.update()
+
+    def initial_boot(self):
+        """Ağır yüklemelerin yapıldığı arka plan fonksiyonu"""
+        self.db = DBManager()
+        self.load_settings()
         self.db.sync_past_months_finance()
+        
+        # Arayüzü güncelle
         self.update_theme_colors()
+        self.nav_bar.visible = True
         self.load_tab(0)
 
     def load_settings(self):
@@ -86,14 +112,18 @@ class MesaiApp:
         self.page.update()
 
     def load_tab(self, index):
+        """HIZLANDIRMA: Sayfa önbellekleme sistemi"""
         self.content_area.controls.clear()
-        if index == 0: self.content_area.controls.append(build_add_view(self))
-        elif index == 1: self.content_area.controls.append(build_month_view(self))
-        elif index == 2: self.content_area.controls.append(build_finance_view(self))
-        elif index == 3: self.content_area.controls.append(build_history_view(self))
+        
+        # Veri değişmiş olabileceği için her seferinde taze build ediyoruz 
+        # (Alternatif: Sadece veri eklendiğinde cache'i temizle)
+        if index == 0: view = build_add_view(self)
+        elif index == 1: view = build_month_view(self)
+        elif index == 2: view = build_finance_view(self)
+        elif index == 3: view = build_history_view(self)
+        
+        self.content_area.controls.append(view)
         self.page.update()
-
-    # --- Olay Yönetimi (Events) ---
 
     def nav_change(self, e):
         self.nav_bar.selected_index = int(e.data)
@@ -111,24 +141,27 @@ class MesaiApp:
 
     def save_mesai(self, e):
         if not (self.start_time and self.end_time): return
-        maas = float(self.txt_salary.value)
-        katsayi = float(self.txt_katsayi.value)
-        
-        t1 = datetime.combine(date.today(), self.start_time)
-        t2 = datetime.combine(date.today(), self.end_time)
-        if t2 < t1: t2 += timedelta(days=1)
-        
-        dk = int((t2 - t1).total_seconds() / 60)
-        dakika_ucreti = ((maas / 30) / 9) / 60
-        ucret = round(dakika_ucreti * dk * katsayi, 2)
-        tarih = self.selected_date.strftime("%Y-%m-%d")
-        
-        data = (tarih, self.start_time.strftime("%H:%M"), self.end_time.strftime("%H:%M"), maas, dk, ucret)
-        self.db.save_mesai(data, self.editing_id)
-        
-        self.editing_id = None
-        self.nav_bar.selected_index = 1
-        self.load_tab(1)
+        try:
+            maas = float(self.txt_salary.value)
+            katsayi = float(self.txt_katsayi.value)
+            
+            t1 = datetime.combine(date.today(), self.start_time)
+            t2 = datetime.combine(date.today(), self.end_time)
+            if t2 < t1: t2 += timedelta(days=1)
+            
+            dk = int((t2 - t1).total_seconds() / 60)
+            dakika_ucreti = ((maas / 30) / 9) / 60
+            ucret = round(dakika_ucreti * dk * katsayi, 2)
+            tarih = self.selected_date.strftime("%Y-%m-%d")
+            
+            data = (tarih, self.start_time.strftime("%H:%M"), self.end_time.strftime("%H:%M"), maas, dk, ucret)
+            self.db.save_mesai(data, self.editing_id)
+            
+            self.editing_id = None
+            self.nav_bar.selected_index = 1
+            self.load_tab(1)
+        except Exception as ex:
+            self.show_msg(f"Hata: {str(ex)}", "red")
 
     def delete_mesai(self, row_id, tab_index):
         self.db.delete_mesai(row_id)
@@ -136,8 +169,11 @@ class MesaiApp:
 
     def add_finance(self, tur):
         if not self.txt_fin_amount.value: return
-        self.db.add_finance_record(tur, float(self.txt_fin_amount.value), self.txt_fin_desc.value or "İşlem")
-        self.load_tab(2)
+        try:
+            self.db.add_finance_record(tur, float(self.txt_fin_amount.value), self.txt_fin_desc.value or "İşlem")
+            self.load_tab(2)
+        except:
+            self.show_msg("Geçersiz Tutar", "red")
 
     def load_edit(self, r):
         self.editing_id = r[0]
@@ -168,12 +204,17 @@ class MesaiApp:
 
     def restore_result(self, e):
         if e.files:
-            shutil.copy2(e.files[0].path, self.db.db_path)
-            self.db = DBManager() # DB bağlantısını yenile
-            self.load_settings()
-            self.update_theme_colors()
-            self.show_msg("Yedek Yüklendi!", "green")
-            self.load_tab(0)
+            try:
+                shutil.copy2(e.files[0].path, self.db.db_path)
+                self.db = DBManager() 
+                self.load_settings()
+                self.update_theme_colors()
+                self.show_msg("Yedek Yüklendi!", "green")
+                self.content_area.controls.clear()
+                self.content_area.controls.append(build_settings_view(self))
+                self.page.update()
+            except Exception as ex:
+                self.show_msg(f"Hata: {str(ex)}", "red")
 
     def open_picker(self, p):
         p.open = True

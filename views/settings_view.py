@@ -61,7 +61,9 @@ def build_settings_view(app):
             app.db.conn.commit()
             app.page.close(dlg)
             app.show_msg("Tüm veriler temizlendi!", "red")
-            app.load_tab(0)
+            app.content_area.controls.clear()
+            app.content_area.controls.append(build_settings_view(app))
+            app.page.update()
 
         dlg = ft.AlertDialog(
             title=ft.Text("Tüm Veriler Silinsin mi?"),
